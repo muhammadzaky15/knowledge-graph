@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Indonesia Regulation Knowledge Graph</title>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Inter", "IBM Plex Sans", "Segoe UI", system-ui,
+          -apple-system, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: inherit;
+        background: #f7f9fc;
+        color: #0f172a;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+        padding-bottom: 2rem;
+      }
+
+      header {
+        padding: 1.5rem 2rem 0.25rem;
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 1.7rem;
+        font-weight: 600;
+      }
+
+      header p {
+        margin: 0.35rem 0 0;
+        color: #475569;
+      }
+
+      #controls {
+        display: flex;
+        gap: 0.5rem;
+        padding: 0 2rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      #controls span {
+        font-size: 0.9rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      #controls button {
+        padding: 0.45rem 1.1rem;
+        border-radius: 999px;
+        border: 1px solid #cbd5f5;
+        background: #fff;
+        color: #111827;
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: border-color 0.15s ease, color 0.15s ease,
+          background 0.15s ease;
+      }
+
+      #controls button.active {
+        background: #111827;
+        border-color: #111827;
+        color: #fff;
+      }
+
+      #controls button:hover:not(.active) {
+        border-color: #94a3b8;
+      }
+
+      #graph-container {
+        position: relative;
+        margin: 0 2rem;
+        background: #fff;
+        border-radius: 1rem;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 18px 35px rgba(15, 23, 42, 0.08);
+      }
+
+      svg {
+        display: block;
+        width: 100%;
+        height: 720px;
+        background: #fff;
+      }
+
+      .guide-layer {
+        pointer-events: none;
+      }
+
+      .guide-line {
+        stroke: rgba(148, 163, 184, 0.35);
+        stroke-width: 1;
+        shape-rendering: crispEdges;
+      }
+
+      .guide-label {
+        fill: #475569;
+        font-size: 0.75rem;
+        text-anchor: middle;
+        letter-spacing: 0.03em;
+      }
+
+      .link {
+        stroke-opacity: 0.45;
+      }
+
+      .link-label {
+        font-size: 0.7rem;
+        fill: #475569;
+        pointer-events: none;
+        text-shadow: none;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+      }
+
+      .link-label.visible {
+        opacity: 1;
+      }
+
+      .node circle {
+        stroke-width: 2.5px;
+        cursor: pointer;
+        filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.18));
+      }
+
+      .node text {
+        font-size: 0.8rem;
+        fill: #0f172a;
+        pointer-events: none;
+        font-weight: 500;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+      }
+
+      .node:hover text,
+      .node text.visible {
+        opacity: 1;
+      }
+
+      #legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        margin: 0 2rem;
+        padding: 1rem 0 0.5rem;
+        border-top: 1px solid #e2e8f0;
+      }
+
+      .legend-block h3 {
+        margin: 0 0 0.4rem;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #94a3b8;
+      }
+
+      .legend-items {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.85rem;
+        color: #1f2937;
+      }
+
+      .legend-swatch {
+        width: 1rem;
+        height: 1rem;
+        border-radius: 999px;
+        border: 2px solid rgba(15, 23, 42, 0.08);
+      }
+
+      #tooltip {
+        position: absolute;
+        pointer-events: none;
+        background: rgba(15, 23, 42, 0.9);
+        color: #f8fafc;
+        padding: 0.6rem 0.75rem;
+        border-radius: 0.5rem;
+        font-size: 0.85rem;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+      }
+
+      #tooltip strong {
+        display: block;
+        margin-bottom: 0.15rem;
+        color: #fcd34d;
+      }
+
+      footer {
+        margin: 0 2rem;
+        font-size: 0.8rem;
+        color: #64748b;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Indonesia Regulation Knowledge Graph</h1>
+      <p>Proof-of-concept with three complementary D3 layouts</p>
+    </header>
+
+    <div id="controls">
+      <span>Layout:</span>
+      <button data-mode="force" class="active">Force graph</button>
+      <button data-mode="year">Aligned by year</button>
+      <button data-mode="hierarchy">Aligned by hierarchy</button>
+    </div>
+
+    <div id="graph-container">
+      <svg id="graph" viewBox="0 0 1200 720"></svg>
+      <div id="tooltip"></div>
+    </div>
+
+    <section id="legend"></section>
+
+    <footer>
+      Node fill encodes hierarchy, node border encodes regulation status, edge stroke encodes target status. Hover any node to inspect full metadata.
+    </footer>
+
+    <script>
+      const width = 1200;
+      const height = 720;
+      const modes = ["force", "year", "hierarchy"];
+
+      const hierarchyPalette = d3.schemeTableau10.concat([
+        "#fbbf24",
+        "#c084fc",
+        "#f472b6",
+      ]);
+
+      const baseStatusPalette = {
+        "IN EFFECT": "#34d399",
+        "AMENDED OR REPEALED": "#fb923c",
+        "REVOKED": "#ef4444",
+        "REPEALED": "#ef4444",
+        "UNKNOWN": "#94a3b8",
+        NONE: "#94a3b8",
+      };
+
+      const specialStatusStyles = {
+        REPEALED: { type: "solid", color: "#ef4444" },
+        REVOKED: { type: "solid", color: "#ef4444" },
+        AMENDED: {
+          type: "gradient",
+          colors: ["#facc15", "#fde047"],
+        },
+        "PARTIALLY REPEALED": {
+          type: "gradient",
+          colors: ["#fde047", "#fbbf24"],
+        },
+        "AMENDED AND PARTIALLY REPEALED": {
+          type: "gradient",
+          colors: ["#facc15", "#f59e0b"],
+        },
+      };
+
+      const svg = d3.select("#graph");
+      const tooltip = d3.select("#tooltip");
+      const controls = d3.selectAll("#controls button");
+      const legend = d3.select("#legend");
+      const defs = svg.append("defs");
+      const guideLayer = svg.append("g").attr("class", "guide-layer");
+      let currentMode = "force";
+
+      const simulation = d3
+        .forceSimulation()
+        .force(
+          "link",
+          d3
+            .forceLink()
+            .id((d) => d.id)
+            .distance(110)
+            .strength(0.4)
+        )
+        .force("charge", d3.forceManyBody().strength(-280))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collision", d3.forceCollide().radius(36));
+
+      function normalizeStatus(value) {
+        if (!value || value === "None") return "UNKNOWN";
+        return String(value).toUpperCase();
+      }
+
+      function readableHierarchy(primary, backupArray, fallbackType) {
+        if (primary && primary !== "None") return primary;
+        const backup =
+          (Array.isArray(backupArray) && backupArray[0]) || undefined;
+        if (backup && backup !== "None") return backup.replace(/_/g, " ");
+
+        const normalized = (fallbackType || "").toLowerCase();
+        const disallowed = new Set([
+          "",
+          "none",
+          "regulation",
+          "category",
+          "shared_identifier",
+          "category_regulation",
+        ]);
+        if (!disallowed.has(normalized)) return fallbackType;
+        return "Unspecified";
+      }
+
+      function deriveYear(props) {
+        if (props.year) return +props.year;
+        if (props.established_at) {
+          const stamp = Number(props.established_at);
+          if (!Number.isNaN(stamp)) return new Date(stamp).getFullYear();
+        }
+        if (props.enforced_at) {
+          const stamp = Number(props.enforced_at);
+          if (!Number.isNaN(stamp)) return new Date(stamp).getFullYear();
+        }
+        return undefined;
+      }
+
+      async function loadData() {
+        const raw = await d3.json("sample-data-500.json");
+        const nodeMap = new Map();
+        const links = [];
+
+        function ensureNode(rawNode) {
+          const id = rawNode.identity;
+          if (nodeMap.has(id)) return nodeMap.get(id);
+
+          const props = rawNode.properties || {};
+          const hierarchy = readableHierarchy(
+            props.hierarchy_name,
+            props.hierarchy_name_backup,
+            props.type
+          );
+          const status = normalizeStatus(
+            props.status || props.base_legal_status
+          );
+          const title =
+            props.title ||
+            props.name ||
+            props.subtitle ||
+            `${props.type || "node"} ${id}`;
+
+          const node = {
+            id,
+            title,
+            hierarchy,
+            status,
+            year: deriveYear(props),
+            raw: props,
+          };
+
+          nodeMap.set(id, node);
+          return node;
+        }
+
+        for (const entry of raw) {
+          const source = ensureNode(entry.n);
+          const target = ensureNode(entry.m);
+          links.push({
+            id: entry.r.identity,
+            type: entry.r.type || "RELATED_TO",
+            source: source.id,
+            target: target.id,
+          });
+        }
+
+        return { nodes: Array.from(nodeMap.values()), links };
+      }
+
+      function buildColorScales(nodes) {
+        const hierarchies = Array.from(
+          new Set(nodes.map((node) => node.hierarchy))
+        );
+        const hierarchyColor = d3
+          .scaleOrdinal()
+          .domain(hierarchies)
+          .range(hierarchyPalette);
+
+        const uniqueStatuses = Array.from(
+          new Set(nodes.map((node) => node.status))
+        );
+        const fallbackColors = d3.schemeSet2;
+        let fallbackIndex = 0;
+        const statusStyles = {};
+
+        const getFallbackColor = () =>
+          fallbackColors[fallbackIndex++ % fallbackColors.length];
+
+        uniqueStatuses.forEach((status) => {
+          const preset = specialStatusStyles[status];
+          if (preset && preset.type === "gradient") {
+            statusStyles[status] = {
+              type: "gradient",
+              colors: preset.colors,
+              gradientId: `grad-${sanitizeId(status)}`,
+              stroke: `url(#grad-${sanitizeId(status)})`,
+              legendStyle: `background: linear-gradient(90deg, ${preset.colors.join(
+                ", "
+              )}); border-color: transparent; border-width: 0;`,
+            };
+          } else {
+            const color =
+              preset?.color ||
+              baseStatusPalette[status] ||
+              getFallbackColor();
+            statusStyles[status] = {
+              type: "solid",
+              color,
+              stroke: color,
+              legendStyle: `border-color:${color}; background: transparent; border-width:3px;`,
+            };
+          }
+        });
+
+        if (!statusStyles.UNKNOWN) {
+          const color = baseStatusPalette.UNKNOWN;
+          statusStyles.UNKNOWN = {
+            type: "solid",
+            color,
+            stroke: color,
+            legendStyle: `border-color:${color}; background: transparent; border-width:3px;`,
+          };
+          uniqueStatuses.push("UNKNOWN");
+        }
+
+        const statusColor = (status) =>
+          (statusStyles[status] || statusStyles.UNKNOWN).stroke;
+
+        return {
+          hierarchyColor,
+          statusColor,
+          hierarchies,
+          statusDomain: uniqueStatuses,
+          statusStyles,
+        };
+      }
+
+      function drawLegend({
+        hierarchies,
+        hierarchyColor,
+        statusDomain,
+        statusStyles,
+      }) {
+        legend.html("");
+        const hierarchyBlock = legend
+          .append("div")
+          .attr("class", "legend-block");
+        hierarchyBlock.append("h3").text("Hierarchy → Fill");
+        const hierarchyItems = hierarchyBlock
+          .append("div")
+          .attr("class", "legend-items");
+        hierarchies.forEach((name) => {
+          hierarchyItems
+            .append("div")
+            .attr("class", "legend-item")
+            .html(
+              `<span class="legend-swatch" style="background:${hierarchyColor(
+                name
+              )}"></span>${name}`
+            );
+        });
+
+        const statusBlock = legend.append("div").attr("class", "legend-block");
+        statusBlock.append("h3").text("Status → Border & edge");
+        const statusItems = statusBlock
+          .append("div")
+          .attr("class", "legend-items");
+        Array.from(new Set(statusDomain)).forEach((status) => {
+          statusItems
+            .append("div")
+            .attr("class", "legend-item")
+            .html(
+              `<span class="legend-swatch" style="${statusStyles[status].legendStyle}"></span>${status}`
+            );
+        });
+      }
+
+      function sanitizeId(value) {
+        return String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      }
+
+      function ensureStatusDefinitions(statusStyles) {
+        Object.values(statusStyles).forEach((style) => {
+          if (style.type !== "gradient" || style.defined) return;
+          const gradient = defs
+            .append("linearGradient")
+            .attr("id", style.gradientId)
+            .attr("x1", "0%")
+            .attr("y1", "0%")
+            .attr("x2", "100%")
+            .attr("y2", "0%");
+          style.colors.forEach((color, idx) => {
+            gradient
+              .append("stop")
+              .attr("offset", `${(idx / (style.colors.length - 1 || 1)) * 100}%`)
+              .attr("stop-color", color);
+          });
+          style.defined = true;
+        });
+      }
+
+      function createMarkers(statuses, statusColor) {
+        Array.from(new Set(statuses)).forEach((status) => {
+          const markerId = `arrow-${sanitizeId(status)}`;
+          defs
+            .append("marker")
+            .attr("id", markerId)
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 24)
+            .attr("refY", 0)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,-5L10,0L0,5")
+            .attr("fill", statusColor(status));
+        });
+      }
+
+      function activateButton(targetMode) {
+        controls.classed("active", function () {
+          return this.dataset.mode === targetMode;
+        });
+      }
+
+      function formatTooltip(node) {
+        const details = [
+          node.raw.title || node.title,
+          node.raw.subtitle,
+          node.raw.status && `Status: ${node.raw.status}`,
+          node.year && `Year: ${node.year}`,
+          node.hierarchy && `Hierarchy: ${node.hierarchy}`,
+        ].filter(Boolean);
+        return `<strong>${node.title}</strong>${details
+          .slice(1)
+          .map((line) => `<div>${line}</div>`)
+          .join("")}`;
+      }
+
+      function setupGraph(nodes, links, helpers) {
+        const { hierarchyColor, statusColor, statusStyles } = helpers;
+        const nodeById = new Map(nodes.map((n) => [n.id, n]));
+
+        ensureStatusDefinitions(statusStyles);
+        createMarkers(helpers.statusDomain, statusColor);
+
+        const enrichedLinks = links.map((link) => ({
+          ...link,
+          source: nodeById.get(link.source),
+          target: nodeById.get(link.target),
+        }));
+
+        const link = svg
+          .append("g")
+          .attr("class", "links")
+          .selectAll("line")
+          .data(enrichedLinks)
+          .join("line")
+          .attr("class", "link")
+          .attr("stroke-width", 1.5);
+
+        const linkLabels = svg
+          .append("g")
+          .attr("class", "link-labels")
+          .selectAll("text")
+          .data(enrichedLinks)
+          .join("text")
+          .attr("class", "link-label")
+          .text((d) => d.type);
+
+        const node = svg
+          .append("g")
+          .attr("class", "nodes")
+          .selectAll("g")
+          .data(nodes)
+          .join("g")
+          .attr("class", "node")
+          .call(
+            d3
+              .drag()
+              .on("start", dragstarted)
+              .on("drag", dragged)
+              .on("end", dragended)
+          );
+
+        node
+          .append("circle")
+          .attr("r", 14)
+          .attr("fill", (d) => hierarchyColor(d.hierarchy))
+          .attr("stroke", (d) => statusColor(d.status));
+
+        node
+          .append("text")
+          .attr("x", 18)
+          .attr("dy", "0.35em")
+          .text((d) => d.title);
+
+        function toggleLinkLabel(targetLink, isVisible) {
+          linkLabels
+            .filter((l) => l === targetLink)
+            .classed("visible", isVisible);
+        }
+
+        link
+          .on("mouseover", (event, d) => toggleLinkLabel(d, true))
+          .on("mouseout", (event, d) => toggleLinkLabel(d, false));
+
+        node
+          .on("mouseover", (event, d) => {
+            tooltip.html(formatTooltip(d));
+            tooltip.style("opacity", 1);
+          })
+          .on("mousemove", (event) => {
+            tooltip.style("left", `${event.offsetX + 15}px`);
+            tooltip.style("top", `${event.offsetY + 15}px`);
+          })
+          .on("mouseout", () => tooltip.style("opacity", 0));
+
+        simulation.nodes(nodes).on("tick", ticked);
+        simulation.force("link").links(enrichedLinks);
+
+        function ticked() {
+          if (currentMode === "year") {
+            clampNodeX(nodes, 18);
+          } else if (currentMode === "hierarchy") {
+            clampNodeX(nodes, 24);
+          }
+
+          link
+            .attr("x1", (d) => d.source.x)
+            .attr("y1", (d) => d.source.y)
+            .attr("x2", (d) => d.target.x)
+            .attr("y2", (d) => d.target.y)
+            .attr("stroke", (d) => statusColor(d.target.status))
+            .attr(
+              "marker-end",
+              (d) => `url(#arrow-${sanitizeId(d.target.status)})`
+            );
+
+          linkLabels
+            .attr("x", (d) => (d.source.x + d.target.x) / 2)
+            .attr("y", (d) => (d.source.y + d.target.y) / 2 - 6);
+
+          node.attr("transform", (d) => `translate(${d.x},${d.y})`);
+        }
+
+        function dragstarted(event, d) {
+          if (!event.active) simulation.alphaTarget(0.3).restart();
+          d.fx = d.x;
+          d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+          d.fx = event.x;
+          d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+          if (!event.active) simulation.alphaTarget(0);
+          d.fx = null;
+          d.fy = null;
+        }
+
+        return { link, linkLabels, node, nodeById };
+      }
+
+      function renderGuides(mode, helpers) {
+        guideLayer.selectAll("*").remove();
+        if (mode === "year") {
+          const group = guideLayer.append("g").attr("class", "year-guides");
+          group
+            .selectAll("line")
+            .data(helpers.yearTicks)
+            .join("line")
+            .attr("class", "guide-line")
+            .attr("x1", (d) => helpers.yearScale(d))
+            .attr("x2", (d) => helpers.yearScale(d))
+            .attr("y1", 20)
+            .attr("y2", height - 60);
+
+          group
+            .selectAll("text")
+            .data(helpers.yearTicks)
+            .join("text")
+            .attr("class", "guide-label")
+            .attr("x", (d) => helpers.yearScale(d))
+            .attr("y", height - 35)
+            .text((d) => d);
+        } else if (mode === "hierarchy") {
+          const group = guideLayer.append("g").attr("class", "hier-guides");
+          group
+            .selectAll("line")
+            .data(helpers.hierarchies)
+            .join("line")
+            .attr("class", "guide-line")
+            .attr("x1", (d) => helpers.hierarchyScale(d))
+            .attr("x2", (d) => helpers.hierarchyScale(d))
+            .attr("y1", 20)
+            .attr("y2", height - 60);
+
+          group
+            .selectAll("text")
+            .data(helpers.hierarchies)
+            .join("text")
+            .attr("class", "guide-label")
+            .attr("transform", (d) => {
+              const x = helpers.hierarchyScale(d);
+              const y = height - 30;
+              return `translate(${x},${y}) rotate(-90)`;
+            })
+            .attr("text-anchor", "end")
+            .text((d) => d);
+        }
+      }
+
+      function clampNodeX(nodes, jitter = 24) {
+        nodes.forEach((node) => {
+          if (typeof node.anchorX !== "number") return;
+          const delta = node.x - node.anchorX;
+          const limited =
+            delta > jitter ? jitter : delta < -jitter ? -jitter : delta;
+          node.x = node.anchorX + limited;
+        });
+      }
+
+      function applyLayout(mode, nodes, helpers) {
+        const { hierarchyScale, yearScale, minYear } = helpers;
+        currentMode = mode;
+        simulation.force("x", null);
+        simulation.force("y", null);
+
+        if (mode === "year") {
+          simulation.force(
+            "x",
+            d3
+              .forceX((d) => {
+                const year = d.year ?? minYear;
+                return yearScale(year);
+              })
+              .strength(0.6)
+          );
+
+          simulation.force("y", d3.forceY(height / 2).strength(0.05));
+          nodes.forEach((d) => {
+            const year = d.year ?? minYear;
+            d.anchorX = yearScale(year);
+          });
+        } else if (mode === "hierarchy") {
+          simulation.force(
+            "x",
+            d3
+              .forceX((d) => hierarchyScale(d.hierarchy))
+              .strength(0.8)
+          );
+          simulation.force(
+            "y",
+            d3
+              .forceY((d) => {
+                const jitter = ((d.id % 97) / 96 - 0.5) * 80;
+                return height / 2 + jitter;
+              })
+              .strength(0.04)
+          );
+          nodes.forEach((d) => {
+            d.anchorX = hierarchyScale(d.hierarchy);
+          });
+        } else {
+          simulation.force("x", null);
+          simulation.force("y", null);
+          nodes.forEach((d) => {
+            delete d.anchorX;
+          });
+        }
+
+        renderGuides(mode, helpers);
+        simulation.alpha(1).restart();
+      }
+
+      async function init() {
+        const { nodes, links } = await loadData();
+        const helpers = buildColorScales(nodes);
+        const yearValues = nodes
+          .map((d) => d.year)
+          .filter((year) => year !== undefined && !Number.isNaN(year));
+        const fallbackYear = new Date().getFullYear();
+        helpers.minYear = yearValues.length
+          ? d3.min(yearValues)
+          : fallbackYear - 10;
+        helpers.maxYear = yearValues.length
+          ? d3.max(yearValues)
+          : fallbackYear;
+        helpers.yearScale = d3
+          .scaleLinear()
+          .domain([helpers.minYear, helpers.maxYear])
+          .range([80, width - 80]);
+        helpers.yearTicks = helpers.yearScale.ticks(
+          Math.min(8, Math.max(1, helpers.maxYear - helpers.minYear))
+        );
+        if (!helpers.yearTicks.length) {
+          helpers.yearTicks = [Math.round(helpers.minYear)];
+        }
+        helpers.hierarchyScale = d3
+          .scalePoint()
+          .domain(helpers.hierarchies)
+          .range([100, width - 100]);
+
+        drawLegend(helpers);
+        const elements = setupGraph(nodes, links, helpers);
+
+        controls.on("click", (event) => {
+          const mode = event.currentTarget.dataset.mode;
+          if (!mode) return;
+          activateButton(mode);
+          applyLayout(mode, nodes, helpers);
+        });
+
+        applyLayout("force", nodes, helpers);
+      }
+
+      init().catch((error) => {
+        console.error("Failed to load graph data", error);
+        svg
+          .append("text")
+          .attr("x", width / 2)
+          .attr("y", height / 2)
+          .attr("fill", "#f87171")
+          .attr("text-anchor", "middle")
+          .text("Unable to load graph data.");
+      });
+    </script>
+  </body>
+</html>
+
